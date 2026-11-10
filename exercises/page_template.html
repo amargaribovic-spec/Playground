@@ -1,0 +1,692 @@
+<title>Meter Query Drills</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a meter-room workbook. Sticky left rail = the register (progress) + module index; main column = exercise cards. Stacks on phones. */
+:root {
+  --paper: #F2F4F6;
+  --surface: #FFFFFF;
+  --sunk: #E8ECEF;
+  --ink: #15212C;
+  --muted: #586572;
+  --line: #D3DAE0;
+  --amber: #A85F00;        /* electricity, local server */
+  --amber-soft: #F6E7CF;
+  --water: #0F6A82;        /* water, browser playground */
+  --water-soft: #D6ECF1;
+  --ok: #2B7A4B;
+  --ok-soft: #DCEFE3;
+  --bad: #B3261E;
+  --bad-soft: #F7DEDB;
+  --digit-bg: #1B2731;
+  --digit-fg: #F3F5F7;
+  --digit-red: #C2352B;
+  --focus: #0F6A82;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0E151B; --surface: #151F27; --sunk: #1B2832; --ink: #E3E9EE; --muted: #93A1AD; --line: #2A3845;
+    --amber: #EFA23A; --amber-soft: #3A2A12; --water: #52B9D2; --water-soft: #12323B;
+    --ok: #5CC28A; --ok-soft: #133024; --bad: #F08A80; --bad-soft: #3A1714;
+    --digit-bg: #05090C; --digit-fg: #E8EDF1; --digit-red: #D9473C; --focus: #52B9D2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0E151B; --surface: #151F27; --sunk: #1B2832; --ink: #E3E9EE; --muted: #93A1AD; --line: #2A3845;
+  --amber: #EFA23A; --amber-soft: #3A2A12; --water: #52B9D2; --water-soft: #12323B;
+  --ok: #5CC28A; --ok-soft: #133024; --bad: #F08A80; --bad-soft: #3A1714;
+  --digit-bg: #05090C; --digit-fg: #E8EDF1; --digit-red: #D9473C; --focus: #52B9D2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+a { color: var(--water); }
+code, pre, textarea.mono { font-family: var(--f-mono); }
+code { font-size: 0.88em; background: var(--sunk); padding: 0.08em 0.35em; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 880px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+
+/* rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 18px; }
+@media (max-width: 880px) { .rail { position: static; } }
+.brand { font-family: var(--f-display); font-weight: 700; font-size: 30px; line-height: 1.05; letter-spacing: 0.01em; text-wrap: balance; margin: 0; }
+.brand small { display: block; font-family: var(--f-body); font-weight: 400; font-size: 13px; color: var(--muted); letter-spacing: 0; margin-top: 6px; }
+.register { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
+.register .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); display: flex; justify-content: space-between; }
+.digits { display: flex; gap: 3px; align-items: stretch; }
+.digit { flex: 1; background: var(--digit-bg); color: var(--digit-fg); font: 600 30px/1 var(--f-mono); text-align: center; padding: 8px 0 7px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+.digit.red { background: var(--digit-red); }
+.digits .of { align-self: end; font: 500 13px var(--f-mono); color: var(--muted); padding-left: 6px; white-space: nowrap; }
+.subline { font-size: 12.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+.subline b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.save-note { font-size: 12px; color: var(--muted); }
+.save-note.warn { color: var(--bad); }
+.modnav { display: grid; gap: 2px; }
+.modnav a { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; text-decoration: none; color: var(--ink); padding: 6px 8px; border-radius: 6px; font-size: 13.5px; }
+.modnav a:hover { background: var(--sunk); }
+.modnav .n { font: 600 12px var(--f-mono); color: var(--muted); }
+.modnav .c { font: 500 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.modnav .c.full { color: var(--ok); }
+.legend { display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: flex; gap: 8px; align-items: center; }
+
+/* main */
+main { display: grid; gap: 36px; min-width: 0; }
+.intro { display: grid; gap: 14px; }
+.intro p { margin: 0; max-width: 70ch; }
+.cards2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
+.panel h3 { margin: 0; font: 600 17px var(--f-display); letter-spacing: 0.02em; display: flex; gap: 8px; align-items: center; }
+.panel p, .panel ul, .panel ol { margin: 0; font-size: 14px; }
+.panel ul, .panel ol { padding-left: 20px; display: grid; gap: 4px; }
+details.rules > summary { cursor: pointer; font: 600 18px var(--f-display); letter-spacing: 0.02em; list-style: none; display: flex; gap: 10px; align-items: center; }
+details.rules > summary::-webkit-details-marker { display: none; }
+details.rules > summary::before { content: "+"; font-family: var(--f-mono); color: var(--muted); width: 14px; }
+details.rules[open] > summary::before { content: "−"; }
+.rules-body { display: grid; gap: 14px; margin-top: 14px; }
+.tablewrap { overflow-x: auto; }
+table.mini { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+table.mini th, table.mini td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.mini th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+table.mini td { font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+table.mini tr.bad td { background: var(--bad-soft); }
+table.mini tr.good td { background: var(--ok-soft); }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip { font: 500 13px var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+section.module { display: grid; gap: 12px; scroll-margin-top: 16px; }
+.modhead { display: grid; gap: 2px; border-bottom: 2px solid var(--ink); padding-bottom: 8px; }
+.modhead .eyebrow { font: 600 12px var(--f-mono); color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.modhead h2 { margin: 0; font: 700 26px/1.1 var(--f-display); letter-spacing: 0.01em; text-wrap: balance; }
+.modhead p { margin: 0; color: var(--muted); font-size: 14px; }
+
+details.ex { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+details.ex[open] { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); }
+details.ex > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; }
+details.ex > summary::-webkit-details-marker { display: none; }
+.exnum { font: 600 13px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
+.done-box { width: 20px; height: 20px; accent-color: var(--ok); cursor: pointer; margin: 0; }
+.extitle { display: grid; gap: 3px; min-width: 0; }
+.extitle strong { font: 600 17px/1.2 var(--f-display); letter-spacing: 0.015em; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.where { font: 600 11px var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px; border-radius: 4px; border: 1px solid; }
+.where.local { color: var(--amber); border-color: var(--amber); background: var(--amber-soft); }
+.where.browser { color: var(--water); border-color: var(--water); background: var(--water-soft); }
+.where.review { color: var(--muted); border-color: var(--line); }
+.status { font: 500 12px var(--f-body); padding: 3px 9px; border-radius: 999px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
+.status.match { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.status.mismatch { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+.status.done { color: var(--paper); background: var(--ok); border-color: var(--ok); }
+@media (max-width: 560px) {
+  details.ex > summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .exnum { display: none; }
+}
+
+.exbody { border-top: 1px solid var(--line); padding: 16px 18px 18px; display: grid; gap: 14px; }
+.task { margin: 0; max-width: 78ch; }
+.spec { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13.5px; }
+.spec dt { color: var(--muted); }
+.spec dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+details.mini > summary { cursor: pointer; font-size: 13.5px; color: var(--water); width: fit-content; }
+details.mini > div, details.mini > pre { margin-top: 8px; }
+pre.code { background: var(--sunk); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0; font-size: 12.5px; line-height: 1.5; }
+.codehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+.field { display: grid; gap: 6px; }
+.field label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+textarea { width: 100%; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; resize: vertical; }
+textarea.mono { font-size: 12.5px; tab-size: 4; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { font: 600 13.5px var(--f-body); border-radius: 7px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 4px 10px; font-size: 12.5px; }
+.verdict { border-radius: 8px; padding: 10px 12px; font-size: 14px; display: grid; gap: 6px; border: 1px solid; }
+.verdict.match { background: var(--ok-soft); border-color: var(--ok); }
+.verdict.mismatch { background: var(--bad-soft); border-color: var(--bad); }
+.verdict.empty { background: var(--sunk); border-color: var(--line); }
+.verdict strong { font-weight: 600; }
+.verdict ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.feedback { background: var(--sunk); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; font-size: 14px; border-left: 3px solid var(--water); }
+.feedback .meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; white-space: normal; }
+.hidden-note { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { details.ex[open] .exbody { animation: rise .18s ease-out; } @keyframes rise { from { opacity: .4; transform: translateY(-3px); } to { opacity: 1; transform: none; } } }
+</style>
+
+<div class="wrap">
+  <aside class="rail" aria-label="Progress">
+    <h1 class="brand">Meter Query Drills<small>57 ClickHouse exercises for the energy &amp; water readings project</small></h1>
+    <div class="register" aria-live="polite">
+      <div class="label"><span>Exercises done</span><span>reg. 01</span></div>
+      <div class="digits" id="reg"></div>
+      <div class="subline"><span>Results matching <b id="matchCount">0</b></span><span>In progress <b id="wipCount">0</b></span></div>
+      <div class="save-note" id="saveNote">Loading your progress…</div>
+    </div>
+    <nav class="modnav" id="modnav" aria-label="Modules"></nav>
+    <div class="legend">
+      <span><i class="where local">Local</i> your Docker server · localhost:8123/play</span>
+      <span><i class="where browser">Browser</i> sql.clickhouse.com</span>
+      <span><i class="where review">Review</i> Claude checks it, no fixed answer</span>
+    </div>
+  </aside>
+
+  <main>
+    <div class="intro">
+      <p>Work through the modules in order. For each exercise, write your SQL in <b>Your SQL</b> (it is saved as your answer), run it in the right place, paste the result rows into <b>Your result</b> and press <b>Check result</b>. Tick the box when you're happy with it. <b>Ask Claude</b> reviews your SQL and gives a hint without giving the answer away.</p>
+      <div class="cards2">
+        <div class="panel">
+          <h3><i class="where local">Local</i> Your Docker server</h3>
+          <p>Set it up once with <code>./setup.sh</code> from the repo (see its README). Then open the web UI at <a href="http://localhost:8123/play" target="_blank" rel="noopener">localhost:8123/play</a> with user <code>admin</code> and the password in your <code>.env</code> file. Datasets: <code>meters</code>, <code>imdb</code>, <code>uk</code>, <code>nyc_taxi</code>.</p>
+          <p>Exercises 11–15, 31, 32 and 39 build a <code>practice</code> database. If it gets messy, run <code>DROP DATABASE practice</code> and restart at exercise 11.</p>
+        </div>
+        <div class="panel">
+          <h3><i class="where browser">Browser</i> Public playground</h3>
+          <p><a href="https://sql.clickhouse.com" target="_blank" rel="noopener">sql.clickhouse.com</a>: read-only, billions of rows. Use it for the exercises marked Browser, including all of module 9 (big data).</p>
+          <p>The public user can return at most 10,000 rows per query, so every answer here is small.</p>
+        </div>
+        <div class="panel">
+          <h3><i class="where local">Local</i> S3 bucket and dbt</h3>
+          <p>Module 10 uses a local S3 bucket (SeaweedFS) holding the meter readings as daily Parquet files, reached in SQL as <code>s3(lake, filename = 'readings/…')</code>.</p>
+          <p>dbt runs in Docker, so no Python is needed: <code>docker compose run --rm dbt build</code>. Your models go in <code>dbt/meter_project/</code>.</p>
+        </div>
+        <div class="panel">
+          <h3>Pasting results</h3>
+          <p>Any of these work:</p>
+          <ul>
+            <li>select and copy the result grid in the web UI;</li>
+            <li>add <code>FORMAT TSVWithNames</code> to your query and copy the text;</li>
+            <li>copy a Pretty table from <code>clickhouse-client</code>.</li>
+          </ul>
+          <p>Header rows, borders and row numbers are ignored. Numbers only need to match to the rounding the exercise asks for.</p>
+        </div>
+      </div>
+
+      <details class="rules panel" id="rules">
+        <summary>Meter data rules</summary>
+        <div class="rules-body">
+          <div class="tablewrap">
+            <table class="mini">
+              <thead><tr><th>Table</th><th>What it holds</th></tr></thead>
+              <tbody>
+                <tr><td>meters.customers</td><td>150 customers: segment (residential / commercial / industrial), city</td></tr>
+                <tr><td>meters.meters</td><td>meter_id 1–200 electricity (15-min, kWh), 201–300 water (hourly, m³); install_date</td></tr>
+                <tr><td>meters.readings</td><td>cumulative register <code>value</code> at <code>ts</code> (UTC, end of interval), <code>ingested_at</code></td></tr>
+                <tr><td>meters.tariffs</td><td>€ per unit: electricity day (07–23 local) / night, water flat</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="cards2">
+            <div class="panel">
+              <h3>Known problems in the data</h3>
+              <ul>
+                <li>Duplicate rows for the same <code>(meter_id, ts)</code>; some have a corrected value. The newest <code>ingested_at</code> wins.</li>
+                <li>Random missing intervals; outages on meter 17 (Feb 10–12) and meter 260 (Mar 5–6).</li>
+                <li>Meters 42 and 230 were replaced at 2026-02-15 00:00 UTC, so their counters restart from 0.</li>
+                <li>Meter 99 has one glitch reading (+5,000 kWh) on 2026-02-20.</li>
+                <li>Some readings arrive up to 5 days late.</li>
+                <li>Local time is Europe/Sarajevo. The clocks move forward on 2026-03-29.</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>Clean consumption, step by step</h3>
+              <ol>
+                <li><b>Deduplicate:</b> one row per <code>(meter_id, ts)</code>, keeping the newest <code>ingested_at</code>.</li>
+                <li><b>Drop glitches:</b> a reading whose value is higher than the next reading's, unless the next reading is a replacement.</li>
+                <li><b>Delta:</b> value − previous value. The first reading at or after <code>toDateTime(install_date, 'UTC')</code> (the replacement moment, midnight UTC) counts its own value.</li>
+                <li><b>Skip</b> each meter's very first reading, because it has nothing to compare with.</li>
+              </ol>
+              <p><b>Convention used in this course:</b> <code>ts</code> is the <em>end</em> of an interval, and each interval's consumption is counted on the date and hour of its <code>ts</code>. Real billing usually uses the interval start (the reading at 00:00 belongs to the previous day), so check which convention your project uses.</p>
+              <p>To reload the dataset: <code>docker compose exec -T clickhouse clickhouse-client --multiquery &lt; datasets/meters.sql</code></p>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="toolbar" role="group" aria-label="Filter exercises">
+        <button class="chip" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip" data-filter="todo" aria-pressed="false">Not done</button>
+        <button class="chip" data-filter="local" aria-pressed="false">Local</button>
+        <button class="chip" data-filter="browser" aria-pressed="false">Browser</button>
+        <button class="chip" data-filter="review" aria-pressed="false">Review</button>
+      </div>
+    </div>
+
+    <div id="modules" style="display:grid;gap:36px"></div>
+  </main>
+</div>
+
+<script type="application/json" id="drill-data">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("drill-data").textContent);
+  const EX = DATA.exercises;
+  const byId = new Map(EX.map(e => [e.id, e]));
+  const state = {};               // id -> {sql, result, done, status, checkMsg, feedback, feedbackAt}
+  EX.forEach(e => { state[e.id] = { sql: "", result: "", done: false, status: null, checkMsg: null, feedback: "", feedbackAt: 0 }; });
+  const LS_KEY = "meter-drills-v1";
+  let store = { kind: "local" };
+  let sample = null;
+  let filter = "all";
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k === "html") n.innerHTML = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids) if (k != null) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+    return n;
+  };
+  const pad = n => String(n).padStart(2, "0");
+  const docId = id => "ex-" + pad(id);
+  const plain = html => { const d = document.createElement("div"); d.innerHTML = html; return d.textContent; };
+
+  /* ---------------- local cache ---------------- */
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      for (const [id, v] of Object.entries(obj)) if (state[id]) Object.assign(state[id], v);
+    } catch (_) {}
+  }
+  function saveLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (_) {}
+  }
+
+  /* ---------------- persistence ---------------- */
+  const writing = {}, dirty = {}, timers = {};
+  function setSaveNote(text, warn) {
+    const n = $("#saveNote"); n.textContent = text; n.classList.toggle("warn", !!warn);
+  }
+  function queueSave(id, delay) {
+    clearTimeout(timers[id]);
+    timers[id] = setTimeout(() => save(id), delay || 0);
+  }
+  function save(id) {
+    saveLocal();
+    if (store.kind !== "db") return;
+    dirty[id] = true;
+    if (!writing[id]) flush(id);
+  }
+  async function flush(id) {
+    writing[id] = true;
+    while (dirty[id]) {
+      dirty[id] = false;
+      const s = state[id];
+      const body = { sql: s.sql, result: s.result, done: s.done, status: s.status, checkMsg: s.checkMsg,
+                     feedback: s.feedback, feedbackAt: s.feedbackAt, updatedAt: Date.now() };
+      try {
+        await store.col.doc(docId(id)).set(body);
+      } catch (e) {
+        if (e && e.code === "unavailable") { await new Promise(r => setTimeout(r, 800 + Math.random() * 800)); dirty[id] = true; continue; }
+        setSaveNote("Couldn't save to your account. Changes are kept in this browser.", true);
+        break;
+      }
+    }
+    writing[id] = false;
+  }
+
+  async function initStore() {
+    loadLocal();
+    renderAllDynamic();
+    const c = window.claude;
+    if (!c || typeof c.use !== "function") { setSaveNote("Saved in this browser only."); return; }
+    c.use("sample").then(s => { sample = s; document.querySelectorAll(".ask-btn").forEach(b => b.hidden = !s); }).catch(() => {});
+    let db = null, user = null;
+    try { [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (_) {}
+    const uid = user ? await user.id() : null;
+    if (!db || !uid) { setSaveNote("Saved in this browser only. Sign in to keep progress across devices."); return; }
+    store = { kind: "db", col: db.collection("data/users/" + uid) };
+    const t = setTimeout(() => setSaveNote("Can't reach your saved progress yet. Showing this browser's copy.", true), 10000);
+    let first = true;
+    store.col.onSnapshot(snap => {
+      for (const d of snap.docs) {
+        const m = /^ex-(\d+)$/.exec(d.id); if (!m) continue;
+        const id = Number(m[1]); if (!state[id]) continue;
+        const v = d.data() || {};
+        const s = state[id];
+        for (const k of ["sql", "result"]) {
+          const ta = document.getElementById(k + "-" + id);
+          if (typeof v[k] === "string" && !(ta && document.activeElement === ta) && !writing[id]) { s[k] = v[k]; if (ta) ta.value = v[k]; }
+        }
+        if (!writing[id]) {
+          s.done = !!v.done; s.status = v.status || null; s.checkMsg = v.checkMsg || null;
+          s.feedback = v.feedback || ""; s.feedbackAt = v.feedbackAt || 0;
+        }
+      }
+      if (first && snap.empty) {
+        // first visit with this account: move any browser-only progress up
+        EX.forEach(e => { const s = state[e.id]; if (s.sql || s.result || s.done || s.feedback) save(e.id); });
+      }
+      first = false;
+      if (!snap.metadata.fromCache) { clearTimeout(t); setSaveNote("Saved to your account automatically."); }
+      saveLocal();
+      renderAllDynamic();
+    }, () => { clearTimeout(t); store = { kind: "local" }; setSaveNote("Saving to your account stopped. Changes are kept in this browser.", true); });
+  }
+
+  /* ---------------- checker ---------------- */
+  const BORDER = /^[\s┌┐└┘├┤┬┴┼─═╞╡╪╒╕╘╛╤╧╔╗╚╝║━┏┓┗┛┃┣┫┳┻╋+\-|:]+$/;
+  const NOISE = /(rows? in set\.|^Query id:|^Elapsed:|^Ok\.$|^Peak memory|^Progress:|^\d+ rows? in set)/i;
+  const BOXEDGE = /^\s*[┌└├╔╚┏┗╞╒╘┡┢┞┟╟]/;
+  function parsePaste(text) {
+    const lines = String(text).replace(/\r/g, "").split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim() !== "");
+    return lines.filter(l => !BORDER.test(l) && !BOXEDGE.test(l) && !NOISE.test(l.trim())).map(l => {
+      let cells;
+      if (l.includes("\t")) cells = l.split("\t");
+      else if (/[│┃║]/.test(l)) cells = l.split(/[│┃║]/);
+      else if (l.includes("|")) cells = l.split("|");
+      else cells = l.trim().split(/\s{2,}/);
+      cells = cells.map(c => c.trim());
+      if (!l.includes("\t")) {
+        if (cells.length && cells[0] === "") cells.shift();
+        if (cells.length && cells[cells.length - 1] === "") cells.pop();
+      }
+      if (cells.length && /^\d+\.$/.test(cells[0])) cells.shift();
+      // Pretty formats print a readable hint ("-- 6.75 million") after the last border: not a column
+      while (cells.length && /^--\s/.test(cells[cells.length - 1])) cells.pop();
+      return cells.map(c => c.replace(/\s+--\s.*$/, "").replace(/^(["'`])(.*)\1$/, "$2").trim());
+    });
+  }
+  const normName = s => String(s).toLowerCase().replace(/[`"']/g, "").replace(/^.*\./, "").trim();
+  const isNullish = v => v === null || v === undefined || /^(\\N|null|ᴺᵁᴸᴸ|)$/i.test(String(v).trim());
+  function asNum(s) {
+    const t = String(s).trim().replace(/(\d)[_,](?=\d{3}(\D|$))/g, "$1");
+    return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t) ? parseFloat(t) : null;
+  }
+  const normDate = s => String(s).trim().replace("T", " ").replace(/ 00:00:00(\.0+)?$/, "");
+  function cellEq(exp, got) {
+    if (isNullish(exp)) return isNullish(got);
+    if (isNullish(got)) return false;
+    const a = asNum(exp), b = asNum(got);
+    if (a !== null && b !== null) {
+      const dec = (String(exp).split(".")[1] || "").length;
+      const tol = dec > 0 ? 0.5 * Math.pow(10, -dec) + 1e-9 : (Number.isInteger(b) ? 0 : 0.005);
+      return Math.abs(a - b) <= tol;
+    }
+    return normDate(exp).toLowerCase() === normDate(got).toLowerCase();
+  }
+  function check(e, text) {
+    let rows = parsePaste(text);
+    if (!rows.length) return { status: null, title: "Nothing to check yet", items: ["Paste the rows your query returned into Your result."] };
+    const cols = e.expected.columns.map(normName);
+    const head = rows[0].map(normName);
+    if (head.filter(c => cols.includes(c)).length >= Math.max(1, Math.ceil(cols.length / 2))) rows = rows.slice(1);
+    const exp = e.expected.rows;
+    if (rows.length && rows.every(r => r.length === cols.length + 1) && rows.every((r, i) => r[0] === String(i + 1))) rows = rows.map(r => r.slice(1));
+    const items = [];
+    const rowEq = (er, gr) => er.length === gr.length && er.every((v, j) => cellEq(v, gr[j]));
+    const colIssue = rows.find(r => r.length !== cols.length);
+    if (colIssue) items.push(`Expected ${cols.length} columns (${e.expected.columns.join(", ")}), but a row has ${colIssue.length}: “${colIssue.join(" | ")}”.`);
+    if (rows.length !== exp.length) items.push(`Expected ${exp.length} row${exp.length === 1 ? "" : "s"}, got ${rows.length}.`);
+    let good = 0;
+    const n = Math.min(rows.length, exp.length);
+    for (let i = 0; i < n; i++) {
+      if (rowEq(exp[i], rows[i])) { good++; continue; }
+      if (items.length < 5 && rows[i].length === cols.length) {
+        const j = exp[i].findIndex((v, k) => !cellEq(v, rows[i][k]));
+        items.push(`Row ${i + 1}, ${e.expected.columns[j]}: expected ${exp[i][j] ?? "NULL"}, got ${rows[i][j] || "(empty)"}.`);
+      }
+    }
+    if (good === exp.length && rows.length === exp.length) return { status: "match", title: exp.length === 1 ? "Result matches." : `Result matches: all ${exp.length} rows are correct.`, items: [] };
+    if (rows.length === exp.length && !colIssue) {
+      const used = new Set();
+      const allFound = exp.every(er => { const k = rows.findIndex((gr, idx) => !used.has(idx) && rowEq(er, gr)); if (k < 0) return false; used.add(k); return true; });
+      if (allFound) return { status: "mismatch", title: "Right rows, wrong order.", items: [`Sort by: ${e.order}.`] };
+    }
+    return { status: "mismatch", title: `Not matching yet: ${good} of ${exp.length} rows correct.`, items };
+  }
+
+  /* ---------------- Ask Claude ---------------- */
+  function buildPrompt(e, s) {
+    const expected = e.expected
+      ? [e.expected.columns.join("\t"), ...e.expected.rows.map(r => r.map(v => v ?? "NULL").join("\t"))].join("\n")
+      : "(no fixed answer; review the reasoning)";
+    return [
+      "You are reviewing a ClickHouse SQL exercise for a junior data engineer who is preparing for a project about electricity and water smart-meter readings. Be encouraging and precise.",
+      "",
+      `Exercise ${e.id}: ${e.title} (${e.where === "browser" ? "public playground sql.clickhouse.com" : "local ClickHouse 25.8"})`,
+      `Task: ${plain(e.task)}`,
+      `Required columns: ${e.cols}. Order: ${e.order}.`,
+      e.verify ? `Check query the learner runs after their DDL:\n${e.verify}` : "",
+      "",
+      "Reference solution (for your comparison only; do not paste it back unless the learner already solved it):",
+      e.solution,
+      "",
+      "Expected result:",
+      expected,
+      "",
+      "Learner's SQL:",
+      s.sql || "(empty)",
+      "",
+      "Learner's pasted result:",
+      s.result || "(empty)",
+      "",
+      `Automatic check: ${s.checkMsg || "not run"}`,
+      "",
+      "Reply in plain text (no Markdown headings, no code fences longer than 6 lines), at most 170 words, in exactly this structure:",
+      "Verdict: Correct / Almost / Not yet",
+      "What works: one or two sentences.",
+      "Fix: the specific issue and a hint toward the fix, not the full answer. Write 'Nothing to fix' if correct.",
+      "ClickHouse tip: one practical tip connected to this exercise, useful in a meter-readings project."
+    ].filter(x => x !== "").join("\n");
+  }
+  const SAMPLE_ERRORS = {
+    not_granted: "Claude isn't allowed on this page. You can allow it from the page's permissions.",
+    sampling_disabled: "Claude isn't available for this account.",
+    rate_limited: "Too many requests just now. Try again in a minute.",
+    session_expired: "Your session expired. Sign in again and retry.",
+    prompt_too_large: "Your SQL or result is too long to send. Trim the pasted result to the rows that matter.",
+    refused: "Claude couldn't review this one. Try rephrasing your notes.",
+  };
+  async function ask(e, btn, out) {
+    const s = state[e.id];
+    s.sql = $("#sql-" + e.id).value; s.result = $("#result-" + e.id).value;
+    if (!s.sql.trim()) { out.hidden = false; out.textContent = "Write your SQL first, then ask for a review."; return; }
+    const ctl = new AbortController();
+    btn.disabled = true;
+    const stop = el("button", { class: "btn ghost small", type: "button", onclick: () => ctl.abort() }, "Stop");
+    btn.after(stop);
+    out.hidden = false; out.textContent = "Thinking…";
+    try {
+      const { text } = await sample(buildPrompt(e, s), { signal: ctl.signal, cache: false, onText: ({ text }) => { out.textContent = text; } });
+      s.feedback = text.slice(0, 4000); s.feedbackAt = Date.now();
+      renderFeedback(e.id); queueSave(e.id, 0);
+    } catch (err) {
+      if (err && err.code === "cancelled") out.textContent = err.text || "Stopped.";
+      else if (err && (err.code === "not_granted" || err.code === "sampling_disabled")) { out.textContent = SAMPLE_ERRORS[err.code]; document.querySelectorAll(".ask-btn").forEach(b => b.hidden = true); }
+      else out.textContent = (err && err.text ? err.text + "\n\n" : "") + (SAMPLE_ERRORS[err && err.code] || "The review was interrupted. Try again.");
+    } finally {
+      btn.disabled = false; stop.remove();
+    }
+  }
+
+  /* ---------------- rendering ---------------- */
+  function expectedTable(e) {
+    const t = el("table", { class: "mini" });
+    t.append(el("thead", {}, el("tr", {}, ...e.expected.columns.map(c => el("th", {}, c)))));
+    const tb = el("tbody");
+    e.expected.rows.forEach(r => tb.append(el("tr", {}, ...r.map(v => el("td", {}, v ?? "NULL")))));
+    t.append(tb);
+    return el("div", { class: "tablewrap" }, t);
+  }
+  function copyBtn(getText) {
+    const b = el("button", { class: "btn ghost small", type: "button" }, "Copy");
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(getText()); b.textContent = "Copied"; }
+      catch (_) { b.textContent = "Select and copy"; }
+      setTimeout(() => (b.textContent = "Copy"), 1600);
+    });
+    return b;
+  }
+  function card(e) {
+    const s = state[e.id];
+    const isReview = e.check === "review";
+    const done = el("input", { type: "checkbox", class: "done-box", id: "done-" + e.id, "aria-label": `Mark exercise ${e.id} as done` });
+    done.addEventListener("click", ev => ev.stopPropagation());
+    done.addEventListener("change", () => { s.done = done.checked; renderDynamic(e.id); renderProgress(); queueSave(e.id, 0); });
+    const summary = el("summary", {},
+      el("span", { class: "exnum" }, "E-" + pad(e.id)),
+      done,
+      el("span", { class: "extitle" },
+        el("strong", {}, e.title),
+        el("span", { class: "tags" },
+          el("i", { class: "where " + e.where }, e.where === "local" ? "Local" : "Browser"),
+          isReview ? el("i", { class: "where review" }, "Review") : null,
+          el("span", {}, e.data))),
+      el("span", { class: "status", id: "status-" + e.id }, "Not started"));
+
+    const sqlTa = el("textarea", { class: "mono", id: "sql-" + e.id, rows: 9, spellcheck: "false", placeholder: isReview ? "Your SQL, DDL and notes…" : "SELECT …" });
+    const resTa = el("textarea", { class: "mono", id: "result-" + e.id, rows: 5, spellcheck: "false", placeholder: isReview ? "Paste the output you want reviewed…" : "Paste the result rows here…" });
+    sqlTa.value = s.sql; resTa.value = s.result;
+    for (const [ta, key] of [[sqlTa, "sql"], [resTa, "result"]]) {
+      ta.addEventListener("input", () => { s[key] = ta.value; renderDynamic(e.id); renderProgress(); queueSave(e.id, 1500); });
+      ta.addEventListener("blur", () => { if (timers[e.id]) queueSave(e.id, 0); });
+    }
+
+    const verdict = el("div", { class: "verdict", id: "verdict-" + e.id, hidden: true });
+    const fb = el("div", { class: "feedback", id: "feedback-" + e.id, hidden: true });
+    const actions = el("div", { class: "actions" });
+    if (!isReview) {
+      actions.append(el("button", { class: "btn", type: "button", onclick: () => {
+        s.sql = sqlTa.value; s.result = resTa.value;
+        const r = check(e, s.result);
+        s.status = r.status; s.checkMsg = r.title + (r.items.length ? " " + r.items.join(" ") : "");
+        renderVerdict(e.id, r); renderDynamic(e.id); renderProgress(); queueSave(e.id, 0);
+      } }, "Check result"));
+    }
+    const askBtn = el("button", { class: "btn " + (isReview ? "" : "ghost") + " ask-btn", type: "button", hidden: !sample }, isReview ? "Ask Claude to review" : "Ask Claude");
+    askBtn.addEventListener("click", () => ask(e, askBtn, fb));
+    actions.append(askBtn);
+
+    const spec = el("dl", { class: "spec" },
+      el("dt", {}, "Result columns"), el("dd", {}, e.cols),
+      el("dt", {}, "Order"), el("dd", {}, e.order),
+      el("dt", {}, "Practice"), el("dd", {}, (e.skills || []).join(" · ")));
+
+    const body = el("div", { class: "exbody" },
+      el("p", { class: "task", html: e.task }),
+      spec,
+      e.verify ? el("div", {},
+        el("div", { class: "codehead" }, el("span", {}, "Check query: run it after your SQL and paste its result"), copyBtn(() => e.verify)),
+        el("pre", { class: "code" }, e.verify)) : null,
+      el("details", { class: "mini" }, el("summary", {}, "Hint"), el("div", { class: "hidden-note" }, e.hint)),
+      el("div", { class: "field" }, el("label", { for: "sql-" + e.id }, "Your SQL"), sqlTa),
+      el("div", { class: "field" }, el("label", { for: "result-" + e.id }, isReview ? "Output to review" : "Your result"), resTa),
+      actions,
+      verdict,
+      fb,
+      e.expected ? el("details", { class: "mini" }, el("summary", {}, "Show expected result"), expectedTable(e)) : null,
+      el("details", { class: "mini" }, el("summary", {}, "Show reference solution"),
+        el("div", {}, el("div", { class: "codehead" }, el("span", {}, "One correct way. Yours can differ."), copyBtn(() => e.solution)),
+          el("pre", { class: "code" }, e.solution))));
+
+    const d = el("details", { class: "ex", id: "ex-" + e.id, "data-where": e.where, "data-review": isReview ? "1" : "0" }, summary, body);
+    return d;
+  }
+  function renderVerdict(id, r) {
+    const v = $("#verdict-" + id);
+    if (!r) { v.hidden = true; return; }
+    v.hidden = false; v.className = "verdict " + (r.status || "empty");
+    v.replaceChildren(el("strong", {}, r.title));
+    if (r.items && r.items.length) v.append(el("ul", {}, ...r.items.map(i => el("li", {}, i))));
+  }
+  function renderFeedback(id) {
+    const s = state[id], f = $("#feedback-" + id);
+    if (!s.feedback) { if (!f.textContent || f.textContent === "Thinking…") f.hidden = true; return; }
+    f.hidden = false;
+    f.replaceChildren(el("span", { class: "meta" }, "Claude's review" + (s.feedbackAt ? " · " + new Date(s.feedbackAt).toLocaleString() : "")), s.feedback);
+  }
+  function statusOf(id) {
+    const s = state[id];
+    if (s.done) return ["done", "Done"];
+    if (s.status === "match") return ["match", "Result matches"];
+    if (s.status === "mismatch") return ["mismatch", "Not matching yet"];
+    if (s.sql.trim() || s.result.trim()) return ["", "In progress"];
+    return ["", "Not started"];
+  }
+  function renderDynamic(id) {
+    const s = state[id];
+    const [cls, label] = statusOf(id);
+    const st = $("#status-" + id); st.className = "status " + cls; st.textContent = label;
+    $("#done-" + id).checked = s.done;
+    if (s.checkMsg && $("#verdict-" + id).hidden) renderVerdict(id, { status: s.status, title: s.checkMsg, items: [] });
+    renderFeedback(id);
+    applyFilter(id);
+  }
+  function renderProgress() {
+    const done = EX.filter(e => state[e.id].done).length;
+    const match = EX.filter(e => state[e.id].status === "match").length;
+    const wip = EX.filter(e => !state[e.id].done && (state[e.id].sql.trim() || state[e.id].result.trim())).length;
+    const digits = String(done).padStart(3, "0").split("");
+    const reg = $("#reg");
+    reg.replaceChildren(...digits.map((d, i) => el("span", { class: "digit" + (i === digits.length - 1 ? " red" : "") }, d)), el("span", { class: "of" }, "/ " + String(EX.length).padStart(3, "0")));
+    reg.setAttribute("aria-label", `${done} of ${EX.length} exercises done`);
+    $("#matchCount").textContent = match; $("#wipCount").textContent = wip;
+    DATA.modules.forEach(m => {
+      const list = EX.filter(e => e.mod === m.id);
+      const c = list.filter(e => state[e.id].done).length;
+      const cn = $("#modcount-" + m.id); cn.textContent = `${c}/${list.length}`; cn.classList.toggle("full", c === list.length);
+    });
+  }
+  function renderAllDynamic() { EX.forEach(e => { const ta1 = $("#sql-" + e.id), ta2 = $("#result-" + e.id);
+    if (document.activeElement !== ta1) ta1.value = state[e.id].sql; if (document.activeElement !== ta2) ta2.value = state[e.id].result;
+    renderDynamic(e.id); }); renderProgress(); }
+  function applyFilter(id) {
+    const e = byId.get(id), d = $("#ex-" + id), s = state[id];
+    let show = true;
+    if (filter === "todo") show = !s.done;
+    else if (filter === "local") show = e.where === "local";
+    else if (filter === "browser") show = e.where === "browser";
+    else if (filter === "review") show = e.check === "review";
+    d.hidden = !show;
+  }
+
+  function build() {
+    const nav = $("#modnav"), host = $("#modules");
+    DATA.modules.forEach(m => {
+      nav.append(el("a", { href: "#module-" + m.id }, el("span", { class: "n" }, pad(m.id)), el("span", {}, m.name), el("span", { class: "c", id: "modcount-" + m.id }, "0/5")));
+      const list = EX.filter(e => e.mod === m.id);
+      const first = list[0].id, last = list[list.length - 1].id;
+      host.append(el("section", { class: "module", id: "module-" + m.id },
+        el("div", { class: "modhead" },
+          el("span", { class: "eyebrow" }, `Module ${m.id} · exercises ${first}–${last}`),
+          el("h2", {}, m.name),
+          el("p", {}, m.blurb)),
+        ...list.map(card)));
+    });
+    document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+      filter = c.dataset.filter;
+      document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === c)));
+      EX.forEach(e => applyFilter(e.id));
+    }));
+    // open the first exercise that isn't done
+    renderAllDynamic();
+  }
+
+  build();
+  initStore().then(() => {
+    const next = EX.find(e => !state[e.id].done);
+    if (next && !document.querySelector("details.ex[open]")) $("#ex-" + next.id).open = true;
+  });
+})();
+</script>

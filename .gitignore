@@ -1,0 +1,12 @@
+# secrets
+.env
+config/s3.json
+config/users_named_collections.xml
+# dbt build output
+dbt/meter_project/target/
+dbt/meter_project/logs/
+dbt/meter_project/dbt_packages/
+dbt/meter_project/.user.yml
+# OS / editor
+.DS_Store
+.vscode/

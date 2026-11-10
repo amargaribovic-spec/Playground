@@ -1,0 +1,11 @@
+<!-- Credentials for the local S3 bucket, read from environment variables (never hard-code keys).
+     Use it as:  SELECT * FROM s3(lake, filename = 'readings/2026/01/*.parquet') -->
+<clickhouse>
+    <named_collections>
+        <lake>
+            <url>http://s3:8333/meter-raw/</url>
+            <access_key_id from_env="S3_ACCESS_KEY"/>
+            <secret_access_key from_env="S3_SECRET_KEY"/>
+        </lake>
+    </named_collections>
+</clickhouse>

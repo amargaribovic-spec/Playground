@@ -1,0 +1,14 @@
+# Tables that already exist in ClickHouse and that dbt reads from but does not build.
+version: 2
+sources:
+  - name: lake
+    schema: lake                # database created in exercise 51
+    tables:
+      - name: readings_raw
+        description: Meter readings loaded from S3, one row per row in each file (duplicates included).
+  - name: meters
+    schema: meters
+    tables:
+      - name: meters
+      - name: customers
+      - name: tariffs

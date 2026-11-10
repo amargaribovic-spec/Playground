@@ -1,0 +1,12 @@
+# How dbt connects to ClickHouse. The password comes from .env through docker-compose.
+meter_project:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      host: clickhouse          # the docker compose service name
+      port: 8123
+      user: "{{ env_var('CLICKHOUSE_USER') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
+      schema: analytics         # database where dbt creates its tables
+      threads: 4
