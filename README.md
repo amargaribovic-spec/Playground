@@ -44,7 +44,7 @@ You can re-run it at any time to reset the datasets. Use `./setup.sh --no-public
 
 ## The exercises
 
-The exercises live on an interactive page; ask the repo owner for the link. For each exercise you write your SQL, paste the result, and the page checks it against the expected answer. Your SQL and progress are saved to your own account and are private to you. A copy of the page is in `exercises/meter-drills.html`.
+The exercises live on an interactive page; ask the repo owner for the link. For each exercise you write your SQL, paste the result, and the page checks it against the expected answer. Each learner gets their own workbook tab, saved to their Claude account with no expiry. Everyone the page is shared with can open every tab (so a reviewer can follow along), but only the owner of a tab can change it. Learners need Contributor access; a reviewer only needs Viewer access. A copy of the page is in `exercises/meter-drills.html`.
 
 | Module | Topic | Runs on |
 |---|---|---|

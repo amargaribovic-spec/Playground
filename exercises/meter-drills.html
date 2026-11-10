@@ -164,6 +164,18 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
 .feedback { background: var(--sunk); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; font-size: 14px; border-left: 3px solid var(--water); }
 .feedback .meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; white-space: normal; }
 .hidden-note { font-size: 13px; color: var(--muted); }
+
+/* team tabs */
+.board { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { display: grid; gap: 1px; text-align: left; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; min-width: 0; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tabname { font: 600 16px/1.2 var(--f-display); letter-spacing: 0.02em; }
+.tabcount { font: 500 11.5px var(--f-mono); opacity: 0.75; font-variant-numeric: tabular-nums; }
+.board-note { margin: 0; font-size: 13px; color: var(--muted); }
+.name-field { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.name-input { font: 14px var(--f-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; width: 12em; max-width: 100%; }
+textarea[readonly] { background: var(--sunk); }
 @media (prefers-reduced-motion: no-preference) { details.ex[open] .exbody { animation: rise .18s ease-out; } @keyframes rise { from { opacity: .4; transform: translateY(-3px); } to { opacity: 1; transform: none; } } }
 </style>
 
@@ -171,7 +183,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
   <aside class="rail" aria-label="Progress">
     <h1 class="brand">Meter Query Drills<small>57 ClickHouse exercises for the energy &amp; water readings project</small></h1>
     <div class="register" aria-live="polite">
-      <div class="label"><span>Exercises done</span><span>reg. 01</span></div>
+      <div class="label"><span id="regLabel">Exercises done</span><span>reg. 01</span></div>
       <div class="digits" id="reg"></div>
       <div class="subline"><span>Results matching <b id="matchCount">0</b></span><span>In progress <b id="wipCount">0</b></span></div>
       <div class="save-note" id="saveNote">Loading your progress…</div>
@@ -185,6 +197,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
   </aside>
 
   <main>
+    <section class="board" id="board" aria-label="Team workbooks" hidden></section>
     <div class="intro">
       <p>Work through the modules in order. For each exercise, write your SQL in <b>Your SQL</b> (it is saved as your answer), run it in the right place, paste the result rows into <b>Your result</b> and press <b>Check result</b>. Tick the box when you're happy with it. <b>Ask Claude</b> reviews your SQL and gives a hint without giving the answer away.</p>
       <div class="cards2">
@@ -276,11 +289,19 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
   const DATA = JSON.parse(document.getElementById("drill-data").textContent);
   const EX = DATA.exercises;
   const byId = new Map(EX.map(e => [e.id, e]));
-  const state = {};               // id -> {sql, result, done, status, checkMsg, feedback, feedbackAt}
-  EX.forEach(e => { state[e.id] = { sql: "", result: "", done: false, status: null, checkMsg: null, feedback: "", feedbackAt: 0 }; });
+  // Each person has a workbook at progress/<their id>/ex/ex-NN. Everyone with access can READ every
+  // workbook (the senior sees all of them); each person can WRITE only their own (enforced by db rules).
+  const blank = () => ({ sql: "", result: "", done: false, status: null, checkMsg: null, feedback: "", feedbackAt: 0 });
+  const BLANK = Object.freeze(blank());
+  const state = {};               // MY workbook: id -> {sql, result, done, status, checkMsg, feedback, feedbackAt}
+  EX.forEach(e => { state[e.id] = blank(); });
+  const others = {};              // uid -> { id -> state }  (read-only copies of other people's workbooks)
+  const people = {};              // uid -> { label, joinedAt }  (from progress/<uid>)
+  const profiles = {};            // uid -> profile name, resolved at render time (never stored)
   const LS_KEY = "meter-drills-v1";
   let store = { kind: "local" };
-  let sample = null;
+  let sample = null, userNs = null, dbNs = null;
+  let me = null, viewing = null, canWrite = true;
   let filter = "all";
 
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -298,6 +319,9 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
   const pad = n => String(n).padStart(2, "0");
   const docId = id => "ex-" + pad(id);
   const plain = html => { const d = document.createElement("div"); d.innerHTML = html; return d.textContent; };
+  const viewingOther = () => !!(viewing && viewing !== me);
+  const V = id => viewingOther() ? ((others[viewing] || {})[id] || BLANK) : state[id];
+  const nameOf = uid => (people[uid] && people[uid].label) || profiles[uid] || (uid === me ? "You" : "Someone");
 
   /* ---------------- local cache ---------------- */
   function loadLocal() {
@@ -323,13 +347,36 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
   }
   function save(id) {
     saveLocal();
-    if (store.kind !== "db") return;
+    if (store.kind !== "db" || !canWrite) return;
     dirty[id] = true;
     if (!writing[id]) flush(id);
   }
+  function readOnlyAccess() {
+    canWrite = false;
+    setSaveNote("You can see everyone's work. Saving your own needs Contributor access on this page; for now your changes stay in this browser.", true);
+    renderTabs(); renderAllDynamic();
+  }
+  let personWrite = Promise.resolve();
+  function ensurePerson(extra) {
+    // the person document makes you appear as a tab for the others; written on your first save
+    personWrite = personWrite.then(async () => {
+      const ref = store.db.doc("progress/" + me);
+      if (!people[me]) {                       // the team list may not have loaded yet: never overwrite an existing entry
+        const snap = await ref.get();
+        if (snap.exists) people[me] = snap.data() || {};
+      }
+      if (people[me] && !extra) return;
+      const body = Object.assign({ joinedAt: (people[me] && people[me].joinedAt) || Date.now(), label: (people[me] && people[me].label) || "" }, extra || {});
+      await ref.set(body);
+      people[me] = body;
+      renderTabs();
+    }).catch(e => { if (e && e.code === "invalid_argument") readOnlyAccess(); });
+    return personWrite;
+  }
   async function flush(id) {
     writing[id] = true;
-    while (dirty[id]) {
+    await ensurePerson();
+    while (dirty[id] && canWrite) {
       dirty[id] = false;
       const s = state[id];
       const body = { sql: s.sql, result: s.result, done: s.done, status: s.status, checkMsg: s.checkMsg,
@@ -338,6 +385,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
         await store.col.doc(docId(id)).set(body);
       } catch (e) {
         if (e && e.code === "unavailable") { await new Promise(r => setTimeout(r, 800 + Math.random() * 800)); dirty[id] = true; continue; }
+        if (e && e.code === "invalid_argument") { readOnlyAccess(); break; }
         setSaveNote("Couldn't save to your account. Changes are kept in this browser.", true);
         break;
       }
@@ -345,43 +393,85 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
     writing[id] = false;
   }
 
+  function applyDoc(target, d, mine) {
+    const m = /^ex-(\d+)$/.exec(d.id); if (!m) return;
+    const id = Number(m[1]); if (!byId.has(id)) return;
+    const v = d.data() || {};
+    const s = target[id] || (target[id] = blank());
+    if (mine) {
+      for (const k of ["sql", "result"]) {
+        const ta = document.getElementById(k + "-" + id);
+        if (typeof v[k] === "string" && !(ta && document.activeElement === ta) && !writing[id]) s[k] = v[k];
+      }
+      if (writing[id]) return;
+    } else { s.sql = v.sql || ""; s.result = v.result || ""; }
+    s.done = !!v.done; s.status = v.status || null; s.checkMsg = v.checkMsg || null;
+    s.feedback = v.feedback || ""; s.feedbackAt = v.feedbackAt || 0;
+  }
+
+  const watched = {};
+  function watchPerson(uid) {
+    if (watched[uid] || uid === me) return;
+    watched[uid] = dbNs.collection("progress/" + uid + "/ex").onSnapshot(snap => {
+      const t = others[uid] || (others[uid] = {});
+      for (const d of snap.docs) applyDoc(t, d, false);
+      renderTabs();
+      if (viewing === uid) renderAllDynamic();
+    }, () => {});
+  }
+
+  async function resolveNames() {
+    const ids = Object.keys(people).concat(me ? [me] : []);
+    if (!userNs || !ids.length) return;
+    try { const ps = await userNs.profiles(ids); for (const id of ids) profiles[id] = (ps[id] && ps[id].name) || ""; } catch (_) {}
+    renderTabs(); renderProgress();
+  }
+
+  async function migrateOld(db) {
+    // progress saved by the first version of this page lived in a private folder: copy it over once
+    try {
+      const old = await db.collection("data/users/" + me).get();
+      for (const d of old.docs) applyDoc(state, d, true);
+    } catch (_) {}
+    EX.forEach(e => { const s = state[e.id]; if (s.sql || s.result || s.done || s.feedback) save(e.id); });
+  }
+
   async function initStore() {
     loadLocal();
     renderAllDynamic();
     const c = window.claude;
     if (!c || typeof c.use !== "function") { setSaveNote("Saved in this browser only."); return; }
-    c.use("sample").then(s => { sample = s; document.querySelectorAll(".ask-btn").forEach(b => b.hidden = !s); }).catch(() => {});
+    c.use("sample").then(s => { sample = s; renderAllDynamic(); }).catch(() => {});
     let db = null, user = null;
     try { [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (_) {}
-    const uid = user ? await user.id() : null;
-    if (!db || !uid) { setSaveNote("Saved in this browser only. Sign in to keep progress across devices."); return; }
-    store = { kind: "db", col: db.collection("data/users/" + uid) };
-    const t = setTimeout(() => setSaveNote("Can't reach your saved progress yet. Showing this browser's copy.", true), 10000);
+    userNs = user; dbNs = db;
+    me = user ? await user.id() : null;
+    if (!db || !me) { setSaveNote("Saved in this browser only. Sign in to keep progress and see the team."); return; }
+    try { if ((await user.can("data.write")) === false) canWrite = false; } catch (_) {}
+    store = { kind: "db", db, col: db.collection("progress/" + me + "/ex") };
+    viewing = me;
+    const t = setTimeout(() => setSaveNote("Can't reach the saved progress yet. Showing this browser's copy.", true), 10000);
+
+    db.collection("progress").onSnapshot(snap => {
+      for (const d of snap.docs) { people[d.id] = d.data() || {}; watchPerson(d.id); }
+      if (!canWrite && viewing === me) { const first = Object.keys(people).find(u => u !== me); if (first) viewing = first; }
+      resolveNames(); renderTabs(); renderAllDynamic();
+    }, () => {});
+
     let first = true;
     store.col.onSnapshot(snap => {
-      for (const d of snap.docs) {
-        const m = /^ex-(\d+)$/.exec(d.id); if (!m) continue;
-        const id = Number(m[1]); if (!state[id]) continue;
-        const v = d.data() || {};
-        const s = state[id];
-        for (const k of ["sql", "result"]) {
-          const ta = document.getElementById(k + "-" + id);
-          if (typeof v[k] === "string" && !(ta && document.activeElement === ta) && !writing[id]) { s[k] = v[k]; if (ta) ta.value = v[k]; }
-        }
-        if (!writing[id]) {
-          s.done = !!v.done; s.status = v.status || null; s.checkMsg = v.checkMsg || null;
-          s.feedback = v.feedback || ""; s.feedbackAt = v.feedbackAt || 0;
-        }
-      }
-      if (first && snap.empty) {
-        // first visit with this account: move any browser-only progress up
-        EX.forEach(e => { const s = state[e.id]; if (s.sql || s.result || s.done || s.feedback) save(e.id); });
-      }
+      for (const d of snap.docs) applyDoc(state, d, true);
+      if (first && snap.empty && !snap.metadata.fromCache && canWrite) migrateOld(db);
       first = false;
-      if (!snap.metadata.fromCache) { clearTimeout(t); setSaveNote("Saved to your account automatically."); }
+      if (!snap.metadata.fromCache) {
+        clearTimeout(t);
+        if (canWrite) setSaveNote("Saved to your account automatically. Everyone on this page can see your workbook.");
+        else readOnlyAccess();
+      }
       saveLocal();
-      renderAllDynamic();
+      renderTabs(); renderAllDynamic();
     }, () => { clearTimeout(t); store = { kind: "local" }; setSaveNote("Saving to your account stopped. Changes are kept in this browser.", true); });
+    resolveNames();
   }
 
   /* ---------------- checker ---------------- */
@@ -513,7 +603,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
       renderFeedback(e.id); queueSave(e.id, 0);
     } catch (err) {
       if (err && err.code === "cancelled") out.textContent = err.text || "Stopped.";
-      else if (err && (err.code === "not_granted" || err.code === "sampling_disabled")) { out.textContent = SAMPLE_ERRORS[err.code]; document.querySelectorAll(".ask-btn").forEach(b => b.hidden = true); }
+      else if (err && (err.code === "not_granted" || err.code === "sampling_disabled")) { out.textContent = SAMPLE_ERRORS[err.code]; sample = null; document.querySelectorAll(".ask-btn").forEach(b => b.hidden = true); }
       else out.textContent = (err && err.text ? err.text + "\n\n" : "") + (SAMPLE_ERRORS[err && err.code] || "The review was interrupted. Try again.");
     } finally {
       btn.disabled = false; stop.remove();
@@ -565,7 +655,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
 
     const verdict = el("div", { class: "verdict", id: "verdict-" + e.id, hidden: true });
     const fb = el("div", { class: "feedback", id: "feedback-" + e.id, hidden: true });
-    const actions = el("div", { class: "actions" });
+    const actions = el("div", { class: "actions", id: "actions-" + e.id });
     if (!isReview) {
       actions.append(el("button", { class: "btn", type: "button", onclick: () => {
         s.sql = sqlTa.value; s.result = resTa.value;
@@ -574,7 +664,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
         renderVerdict(e.id, r); renderDynamic(e.id); renderProgress(); queueSave(e.id, 0);
       } }, "Check result"));
     }
-    const askBtn = el("button", { class: "btn " + (isReview ? "" : "ghost") + " ask-btn", type: "button", hidden: !sample }, isReview ? "Ask Claude to review" : "Ask Claude");
+    const askBtn = el("button", { class: "btn " + (isReview ? "" : "ghost") + " ask-btn", id: "ask-" + e.id, type: "button", hidden: !sample }, isReview ? "Ask Claude to review" : "Ask Claude");
     askBtn.addEventListener("click", () => ask(e, askBtn, fb));
     actions.append(askBtn);
 
@@ -611,13 +701,13 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
     if (r.items && r.items.length) v.append(el("ul", {}, ...r.items.map(i => el("li", {}, i))));
   }
   function renderFeedback(id) {
-    const s = state[id], f = $("#feedback-" + id);
-    if (!s.feedback) { if (!f.textContent || f.textContent === "Thinking…") f.hidden = true; return; }
+    const s = V(id), f = $("#feedback-" + id);
+    if (!s.feedback) { if (viewingOther() || !f.textContent || f.textContent === "Thinking…") f.hidden = true; return; }
     f.hidden = false;
     f.replaceChildren(el("span", { class: "meta" }, "Claude's review" + (s.feedbackAt ? " · " + new Date(s.feedbackAt).toLocaleString() : "")), s.feedback);
   }
   function statusOf(id) {
-    const s = state[id];
+    const s = V(id);
     if (s.done) return ["done", "Done"];
     if (s.status === "match") return ["match", "Result matches"];
     if (s.status === "mismatch") return ["mismatch", "Not matching yet"];
@@ -625,7 +715,7 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
     return ["", "Not started"];
   }
   function renderDynamic(id) {
-    const s = state[id];
+    const s = V(id);
     const [cls, label] = statusOf(id);
     const st = $("#status-" + id); st.className = "status " + cls; st.textContent = label;
     $("#done-" + id).checked = s.done;
@@ -633,32 +723,84 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
     renderFeedback(id);
     applyFilter(id);
   }
+  function countsFor(get) {
+    return {
+      done: EX.filter(e => get(e.id).done).length,
+      match: EX.filter(e => get(e.id).status === "match").length,
+      wip: EX.filter(e => !get(e.id).done && (get(e.id).sql.trim() || get(e.id).result.trim())).length,
+    };
+  }
   function renderProgress() {
-    const done = EX.filter(e => state[e.id].done).length;
-    const match = EX.filter(e => state[e.id].status === "match").length;
-    const wip = EX.filter(e => !state[e.id].done && (state[e.id].sql.trim() || state[e.id].result.trim())).length;
+    const { done, match, wip } = countsFor(V);
     const digits = String(done).padStart(3, "0").split("");
     const reg = $("#reg");
     reg.replaceChildren(...digits.map((d, i) => el("span", { class: "digit" + (i === digits.length - 1 ? " red" : "") }, d)), el("span", { class: "of" }, "/ " + String(EX.length).padStart(3, "0")));
     reg.setAttribute("aria-label", `${done} of ${EX.length} exercises done`);
+    $("#regLabel").textContent = viewingOther() ? `${nameOf(viewing)}: exercises done` : "Exercises done";
     $("#matchCount").textContent = match; $("#wipCount").textContent = wip;
     DATA.modules.forEach(m => {
       const list = EX.filter(e => e.mod === m.id);
-      const c = list.filter(e => state[e.id].done).length;
+      const c = list.filter(e => V(e.id).done).length;
       const cn = $("#modcount-" + m.id); cn.textContent = `${c}/${list.length}`; cn.classList.toggle("full", c === list.length);
     });
   }
-  function renderAllDynamic() { EX.forEach(e => { const ta1 = $("#sql-" + e.id), ta2 = $("#result-" + e.id);
-    if (document.activeElement !== ta1) ta1.value = state[e.id].sql; if (document.activeElement !== ta2) ta2.value = state[e.id].result;
-    renderDynamic(e.id); }); renderProgress(); }
+  let lastViewing;
+  function renderAllDynamic() {
+    const other = viewingOther();
+    const switched = lastViewing !== viewing; lastViewing = viewing;
+    EX.forEach(e => {
+      const ta1 = $("#sql-" + e.id), ta2 = $("#result-" + e.id), s = V(e.id);
+      if (switched || document.activeElement !== ta1) ta1.value = s.sql;
+      if (switched || document.activeElement !== ta2) ta2.value = s.result;
+      ta1.readOnly = ta2.readOnly = other;
+      $("#done-" + e.id).disabled = other;
+      $("#actions-" + e.id).hidden = other;
+      const ask = $("#ask-" + e.id); if (ask) ask.hidden = !sample;
+      if (switched) { $("#verdict-" + e.id).hidden = true; $("#feedback-" + e.id).textContent = ""; }
+      renderDynamic(e.id);
+    });
+    renderProgress();
+  }
   function applyFilter(id) {
-    const e = byId.get(id), d = $("#ex-" + id), s = state[id];
+    const e = byId.get(id), d = $("#ex-" + id), s = V(id);
     let show = true;
     if (filter === "todo") show = !s.done;
     else if (filter === "local") show = e.where === "local";
     else if (filter === "browser") show = e.where === "browser";
     else if (filter === "review") show = e.check === "review";
     d.hidden = !show;
+  }
+
+  /* ---------------- team tabs ---------------- */
+  function renderTabs() {
+    const board = $("#board");
+    if (store.kind !== "db") { board.hidden = true; return; }
+    const ids = Object.keys(people).filter(u => u !== me)
+      .sort((a, b) => ((people[a].joinedAt || 0) - (people[b].joinedAt || 0)) || nameOf(a).localeCompare(nameOf(b)));
+    if (canWrite || people[me]) ids.unshift(me);
+    if (!ids.includes(viewing)) viewing = ids[0] || me;
+    board.hidden = false;
+    const tabs = el("div", { class: "tabs", role: "tablist", "aria-label": "Whose workbook" });
+    for (const uid of ids) {
+      const get = uid === me ? (id => state[id]) : (id => (others[uid] || {})[id] || BLANK);
+      const c = countsFor(get);
+      const label = uid === me ? `${nameOf(me) === "You" ? "You" : nameOf(me) + " (you)"}` : nameOf(uid);
+      tabs.append(el("button", {
+        class: "tab", role: "tab", type: "button", "aria-selected": String(uid === viewing),
+        onclick: () => { if (viewing !== uid) { viewing = uid; renderTabs(); renderAllDynamic(); } }
+      }, el("span", { class: "tabname" }, label), el("span", { class: "tabcount" }, `${c.done}/${EX.length} done · ${c.match} matching`)));
+    }
+    const note = el("p", { class: "board-note" });
+    if (viewingOther()) note.textContent = `You're looking at ${nameOf(viewing)}'s workbook. It's read-only: only ${nameOf(viewing)} can change it.`;
+    else if (canWrite) note.textContent = "This is your workbook. Everyone this page is shared with can open your tab and see your SQL, results and reviews.";
+    else note.textContent = "You can view everyone's workbooks. To keep your own, ask the owner for Contributor access.";
+    const parts = [tabs, note];
+    if (!viewingOther() && canWrite) {
+      const input = el("input", { type: "text", id: "myLabel", class: "name-input", maxlength: "40", placeholder: profiles[me] || "e.g. Ena", value: (people[me] && people[me].label) || "" });
+      input.addEventListener("change", () => ensurePerson({ label: input.value.trim().slice(0, 40) }));
+      parts.push(el("label", { class: "name-field", for: "myLabel" }, el("span", {}, "Your name on the tabs"), input));
+    }
+    board.replaceChildren(...parts);
   }
 
   function build() {
@@ -679,13 +821,13 @@ textarea.mono { font-size: 12.5px; tab-size: 4; }
       document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === c)));
       EX.forEach(e => applyFilter(e.id));
     }));
-    // open the first exercise that isn't done
     renderAllDynamic();
   }
 
   build();
   initStore().then(() => {
-    const next = EX.find(e => !state[e.id].done);
+    // open the first exercise that isn't done
+    const next = EX.find(e => !V(e.id).done);
     if (next && !document.querySelector("details.ex[open]")) $("#ex-" + next.id).open = true;
   });
 })();
